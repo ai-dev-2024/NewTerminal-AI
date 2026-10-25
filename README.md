@@ -176,6 +176,10 @@ NewTerminal-AI/
 - Files under `scripts/` and `releases/` are older alternates and are only lint-checked (error severity), not unit-tested.
 - Ideas: persist history to disk, an OS-aware system prompt, and an allowlist mode for the safety gate.
 
+## Contributing
+
+Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow. Please keep each pull request focused and say how you tested it.
+
 ## License
 
 [MIT](LICENSE)
