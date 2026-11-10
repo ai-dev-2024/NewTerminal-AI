@@ -5,40 +5,67 @@ on:
     tags:
       - "v*.*"   # Runs on version tags like v1.0, v1.1, etc.
 
-jobs:
-  build-release:
-    runs-on: ubuntu-latest
+permissions:
+  contents: read
 
+jobs:
+  verify:
+    name: Lint & test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: pwsh
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.x"
+      - name: Install Pester and PSScriptAnalyzer
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module Pester -RequiredVersion 5.7.1 -Scope CurrentUser -Force -SkipPublisherCheck
+          Install-Module PSScriptAnalyzer -RequiredVersion 1.25.0 -Scope CurrentUser -Force
+
+      - name: Lint (PSScriptAnalyzer)
+        run: ./tools/Invoke-Lint.ps1
+
+      - name: Unit tests (Pester)
+        run: |
+          Import-Module Pester -RequiredVersion 5.7.1
+          Invoke-Pester -Path ./tests -CI
+
+  build-release:
+    name: Build and publish
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed to create the release
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check that the tag matches the module version
+        run: |
+          version="$(sed -n "s/^\$script:ModuleVersion = '\([0-9.]*\)'.*/\1/p" NewTerminal-AI.psm1)"
+          if [ -z "$version" ]; then
+            echo "::error::Could not read \$script:ModuleVersion from NewTerminal-AI.psm1"
+            exit 1
+          fi
+          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match module version ${version}. Update \$script:ModuleVersion before tagging."
+            exit 1
+          fi
 
       - name: Build release ZIP
         run: |
-          mkdir -p newterminal-${GITHUB_REF_NAME}
-          cp install.sh newterminal-${GITHUB_REF_NAME}/
-          cp install.ps1 newterminal-${GITHUB_REF_NAME}/
-          cp NewTerminal-AI.psm1 newterminal-${GITHUB_REF_NAME}/
-          cp README.md newterminal-${GITHUB_REF_NAME}/
-          cp LICENSE newterminal-${GITHUB_REF_NAME}/
-          # Copy media folder if it exists and has content
-          if [ -d "media" ] && [ "$(ls -A media)" ]; then
-            cp -r media newterminal-${GITHUB_REF_NAME}/
-          else
-            mkdir -p newterminal-${GITHUB_REF_NAME}/media
-          fi
-          cd newterminal-${GITHUB_REF_NAME}
-          zip -r ../newterminal-${GITHUB_REF_NAME}.zip .
-          cd ..
+          dir="newterminal-${GITHUB_REF_NAME}"
+          mkdir -p "$dir"
+          cp NewTerminal-AI.psm1 install.ps1 install.sh README.md LICENSE CHANGELOG.md "$dir/"
+          chmod +x "$dir/install.sh"
+          (cd "$dir" && zip -r "../${dir}.zip" .)
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: newterminal-${{ github.ref_name }}.zip
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "newterminal-${GITHUB_REF_NAME}.zip" \
+            --title "$GITHUB_REF_NAME" --generate-notes --verify-tag

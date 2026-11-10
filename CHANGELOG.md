@@ -5,19 +5,40 @@ All notable changes to NewTerminal-AI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.2.0] - 2026-11-10
 
-### Added
-- Pester unit test suite (`tests/NewTerminal-AI.Tests.ps1`) and PSScriptAnalyzer lint script (`tools/Invoke-Lint.ps1`)
-- GitHub Actions CI on Ubuntu and Windows
-- `NEWTERMINAL_AI_MODEL` / `NEWTERMINAL_AI_OLLAMA_URL` environment overrides and `NEWTERMINAL_AI_NO_AUTOSTART` to import the module without starting the REPL
-- Cross-platform support for macOS and Linux
-- Professional project structure with organized directories
-- Comprehensive installation scripts for all platforms
-- Educational command display feature
-- Enhanced documentation and examples
+This release replaces the destructive-command safety gate, fixes the bugs found in a production-readiness
+audit of the module, the sample profile, both installers and the release workflow, removes stale
+duplicate files, and tightens CI. It also includes the changes made since 2.1.0 that had not been
+released yet.
+
+### Security
+- The destructive-command safety gate is rewritten. It now parses the generated command with the PowerShell parser and walks the syntax tree instead of matching 11 regular expressions. It flags deletes and overwrites through any alias, abbreviated parameter, pipeline, statement chain, script block or subexpression; code it cannot inspect (`Invoke-Expression`, `[scriptblock]::Create`, `& $variable`, encoded commands, nested shells, `Start-Process`, COM objects, unvetted .NET calls); disk, power, registry and destructive git commands; and it fails closed on anything that does not parse
+- A command edited at the `ai` prompt is checked by the gate again before it runs
+- Commands containing terminal escape sequences or invisible formatting characters are flagged
+- The system prompt no longer teaches the model to create files with `-Force`
+
+### Changed
+- **Stricter by design:** every delete and every file overwrite is flagged, including a plain `Remove-Item file.txt`. `aia` and `nl` refuse flagged commands; `ai` and the `AI>` prompt show the reasons and run the command only after you type `yes` (`ai` previously could not run a flagged command at all, the `AI>` prompt accepted `y`)
+- The REPL starts on import only in an interactive console, so a profile that imports the module no longer breaks `pwsh -Command`, `pwsh -File` or editor hosts
+- Command output is rendered with the normal PowerShell formatter in every mode
+- `tools/Invoke-Lint.ps1` fails on warnings in every PowerShell file, not only in the module
+- CI scans the git history with gitleaks; the release workflow runs lint and tests first, checks the tag against `$script:ModuleVersion`, and publishes with `gh`
+- `install.sh` installs the launcher to `NEWTERMINAL_AI_BIN_DIR` (default `/usr/local/bin`, falling back to `~/.local/bin`) and picks the Microsoft package repository that matches the distribution
 
 ### Fixed
+- A failed generation (model not pulled, timeout) no longer ends the REPL or makes the module import fail
+- A stale exit code from an earlier program is no longer reported for the current command
+- Objects were printed as their `ToString()` value (`Get-PSDrive` showed only drive names); they are now formatted as tables and lists
+- Prose around a fenced code block and inline backticks are removed from the model's reply instead of being executed
+- "What is the model of this laptop" is no longer answered with the name of the AI model
+- Requests are sent as UTF-8 under Windows PowerShell 5.1
+- The REPL exits at end of input instead of looping on an error
+- `Get-ContextInfo` reports the working-tree status on a detached HEAD
+- `install.sh` no longer overwrites an existing PowerShell profile, and is executable
+- `install.ps1` parses under Windows PowerShell 5.1 (it is now saved with a byte order mark), installs into the module folder of the PowerShell edition that runs it, exports every function the aliases need, and detects a failed `winget`
+- The sample profile no longer calls functions that do not exist or starts a second prompt
+- Release workflow has the permission it needs to create a release and no longer ships an empty `media/` folder
 - Typing `exit` now actually leaves the interactive REPL (`break` previously only left the `switch`)
 - `Get-ContextInfo` no longer throws in directories without `.git`/`package.json` (`Test-Path ... -or ...` parsing bug)
 - Markdown code fences in model replies are now stripped from multi-line responses
@@ -26,6 +47,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Safety check catches `Remove-Item ... C:\` with `-Recurse`/`-Force` in any order
 - Installers pull `llama3.2:1b`, the model the module actually calls (they previously pulled `llama3.2:3b`)
 - Release workflow no longer copies the missing `install-any.sh` and now ships the module file
+
+### Removed
+- `releases/v2.0.0/` (copies of files that live elsewhere in the repository, including an old module with the old safety check)
+- `scripts/`: the alternate installers and the standalone Bash variant. They were broken, and the Bash variant executed model output behind a regex check that could not be made safe. Use `install.ps1` / `install.sh`
+- `scripts/github-integration.ps1` and its output `docs/PROJECT_STATUS.md`
+- `tests/test-installation.ps1`, which reported success whatever happened
+- `assets/media/demo.svg` and `docs/pester-run.svg` (unreferenced or out of date)
+
+### Added
+- `tests/SafetyGate.Tests.ps1` (one test per command the gate must flag or allow) and `tests/Repo.Tests.ps1` (file encodings, sample profile, installers)
+- The gate reports why a command is flagged (`Get-CommandRisk`), and the reasons are shown before any confirmation
+- `.gitattributes` keeps `*.sh` files on LF line endings in a Windows checkout
+- Pester unit test suite (`tests/NewTerminal-AI.Tests.ps1`) and PSScriptAnalyzer lint script (`tools/Invoke-Lint.ps1`)
+- GitHub Actions CI on Ubuntu and Windows
+- `NEWTERMINAL_AI_MODEL` / `NEWTERMINAL_AI_OLLAMA_URL` environment overrides and `NEWTERMINAL_AI_NO_AUTOSTART` to import the module without starting the REPL
+- Cross-platform support for macOS and Linux
+- Professional project structure with organized directories
+- Comprehensive installation scripts for all platforms
+- Educational command display feature
+- Enhanced documentation and examples
 
 ## [2.0.0] - 2025-01-27
 

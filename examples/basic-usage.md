@@ -2,6 +2,11 @@
 
 This guide provides practical examples of using NewTerminal-AI for common tasks.
 
+> **Which command to use.** `aia` runs the generated command straight away, so it refuses anything
+> the safety gate flags: deleting, overwriting, killing or restarting something, and anything it
+> cannot analyse. For those requests use `ai`, which shows the command and the reasons it was
+> flagged, and runs it only after you type `yes`. See the *Safety gate* section of the README.
+
 ## 🚀 Getting Started
 
 ### First Steps
@@ -50,9 +55,9 @@ aia "find files modified in the last 24 hours"
 aia "copy all images to a backup folder"
 aia "move all log files to an archive directory"
 
-# Delete files safely
-aia "delete all temporary files"
-aia "remove empty directories"
+# Delete files (flagged by the safety gate: use `ai` and confirm with "yes")
+ai "delete all temporary files"
+ai "remove empty directories"
 ```
 
 ### File Content Operations
@@ -142,9 +147,9 @@ aia "show all running processes"
 aia "find processes using port 3000"
 aia "show processes using the most CPU"
 
-# Process control
-aia "kill the process running on port 8080"
-aia "restart the nginx service"
+# Process control (flagged by the safety gate: use `ai` and confirm with "yes")
+ai "kill the process running on port 8080"
+ai "restart the nginx service"
 ```
 
 ### System Information
@@ -252,7 +257,7 @@ aia "find where this command is installed"
 
 # Process issues
 aia "find what's using port 80"
-aia "kill all processes with this name"
+ai "kill all processes with this name"   # flagged: confirm with "yes"
 ```
 
 ## 💡 Learning and Help
