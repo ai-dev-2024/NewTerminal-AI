@@ -7,7 +7,7 @@ Thank you for your interest in contributing to NewTerminal-AI! We welcome contri
 1. **Fork the repository** on GitHub
 2. **Clone your fork** locally:
    ```bash
-   git clone https://github.com/yourusername/NewTerminal-AI.git
+   git clone https://github.com/<your-username>/NewTerminal-AI.git
    cd NewTerminal-AI
    ```
 3. **Create a feature branch**:
@@ -20,34 +20,30 @@ Thank you for your interest in contributing to NewTerminal-AI! We welcome contri
 ## 🛠️ Development Setup
 
 ### Prerequisites
-- **Windows**: PowerShell 5.0+, Git
-- **macOS/Linux**: Bash/Zsh, Git
-- [Ollama](https://ollama.ai) installed and running
-- A suitable AI model (e.g., `llama3.2:1b`)
+- PowerShell 7+ (`pwsh`) on Windows, macOS or Linux, and Git
+- [Pester](https://pester.dev) 5.7.1 and PSScriptAnalyzer 1.25.0 (the versions CI uses)
+- [Ollama](https://ollama.com) with a model such as `llama3.2:1b`, only for trying the tool by hand.
+  The automated tests mock every Ollama call.
 
 ### Local Development
 
-1. **Install dependencies**:
-   ```bash
-   # Install Ollama if not already installed
-   # Windows: Download from ollama.ai
-   # macOS: brew install ollama
-   # Linux: curl -fsSL https://ollama.ai/install.sh | sh
-   
-   # Pull a development model
-   ollama pull llama3.2:1b
-   ```
-
-2. **Test the module** (Windows):
+1. **Install the test tools**:
    ```powershell
-   Import-Module .\NewTerminal-AI-fixed.psm1 -Force
-   aia "test command"
+   Install-Module Pester -RequiredVersion 5.7.1 -Scope CurrentUser -Force -SkipPublisherCheck
+   Install-Module PSScriptAnalyzer -RequiredVersion 1.25.0 -Scope CurrentUser -Force
    ```
 
-3. **Test the shell script** (macOS/Linux):
-   ```bash
-   chmod +x scripts/NewTerminal-AI.sh
-   ./scripts/NewTerminal-AI.sh aia "test command"
+2. **Run lint and tests** (no Ollama needed):
+   ```powershell
+   ./tools/Invoke-Lint.ps1
+   Invoke-Pester -Path ./tests
+   ```
+
+3. **Try the module by hand** (needs Ollama running and a pulled model):
+   ```powershell
+   $env:NEWTERMINAL_AI_NO_AUTOSTART = '1'   # load the commands without starting the AI> prompt
+   Import-Module ./NewTerminal-AI.psm1 -Force
+   aia "list files"
    ```
 
 ## 📋 Contribution Guidelines
@@ -117,10 +113,9 @@ Before submitting a PR, please test:
 - [ ] Safety checks for dangerous commands
 
 #### Cross-Platform (if applicable)
-- [ ] Windows PowerShell functionality
-- [ ] macOS Bash/Zsh functionality
-- [ ] Linux Bash/Zsh functionality
-- [ ] Installation scripts work correctly
+- [ ] Windows: PowerShell 7 and Windows PowerShell 5.1
+- [ ] macOS and Linux: PowerShell 7 (`pwsh`)
+- [ ] Installation scripts work correctly (`install.ps1`, `install.sh`)
 
 #### Edge Cases
 - [ ] Ollama not running
@@ -131,10 +126,23 @@ Before submitting a PR, please test:
 
 ### Automated Testing
 
-We're working on automated tests. For now, please:
-1. Test your changes manually
-2. Verify existing functionality still works
-3. Test on multiple platforms if possible
+CI runs PSScriptAnalyzer and the Pester suite on Ubuntu and Windows, plus a gitleaks secret scan.
+A pull request has to keep all three green.
+
+- `tests/NewTerminal-AI.Tests.ps1`: module behaviour (Ollama calls are mocked).
+- `tests/SafetyGate.Tests.ps1`: one row per command the safety gate must flag or allow.
+- `tests/Repo.Tests.ps1`: file encodings, the sample profile, and the installers
+  (`install.sh` runs in a throwaway `HOME` with stub tools; nothing is installed).
+
+Rules for changes:
+
+1. **A bug fix comes with a test that fails without the fix.** Tag it `Regression`.
+2. **A change to the safety gate comes with rows in `tests/SafetyGate.Tests.ps1`**: the command that
+   got through (or was wrongly blocked), and nearby everyday commands that must keep working.
+3. The gate must stay static and fail closed: no lookups on the machine it runs on, and anything it
+   cannot parse or analyse is flagged.
+4. PowerShell files that contain non-ASCII characters must be saved as UTF-8 **with** a byte order
+   mark, otherwise Windows PowerShell 5.1 cannot parse them. `tests/Repo.Tests.ps1` checks this.
 
 ## 🐛 Bug Reports
 
@@ -174,31 +182,27 @@ We love new ideas! When suggesting features:
 ### Project Structure
 ```
 NewTerminal-AI/
-├── NewTerminal-AI-fixed.psm1    # Main PowerShell module
-├── scripts/
-│   ├── NewTerminal-AI.sh         # Unix shell script
-│   ├── install-windows.ps1       # Windows installer
-│   └── install-unix.sh           # Unix installer
-├── docs/                         # Documentation
-├── examples/                     # Usage examples
-├── releases/                     # Release packages
-├── README.md                     # Main documentation
-├── CONTRIBUTING.md               # This file
-└── LICENSE                       # MIT license
+├── NewTerminal-AI.psm1               # The module (all runtime logic, including the safety gate)
+├── Microsoft.PowerShell_profile.ps1  # Sample profile with tab completion
+├── install.ps1 / install.sh          # Installers (Windows / Linux + macOS)
+├── tests/                            # Pester tests
+├── tools/Invoke-Lint.ps1             # PSScriptAnalyzer wrapper
+├── docs/                             # Banner image
+├── examples/                         # Usage examples
+├── .github/workflows/                # CI and release workflows
+├── README.md                         # Main documentation
+├── CONTRIBUTING.md                   # This file
+└── LICENSE                           # MIT license
 ```
 
-### Key Components
+### Key Components (`NewTerminal-AI.psm1`)
 
-#### PowerShell Module (`NewTerminal-AI-fixed.psm1`)
-- **Invoke-AICommand**: Core AI interaction function
-- **Invoke-AICommandAuto**: Auto-execution wrapper
-- **Start-NLMode**: Natural language interactive mode
-- **Safety checks**: Command validation and user confirmation
-
-#### Unix Shell Script (`scripts/NewTerminal-AI.sh`)
-- **Cross-platform compatibility** for macOS and Linux
-- **Equivalent functionality** to PowerShell module
-- **POSIX-compliant** where possible
+- **Invoke-AICommand** (`ai`): generates a command and asks before running it
+- **Invoke-AICommandAuto** (`aia`): generates a command and runs it if the safety gate allows it
+- **Start-NLMode** (`nl`) and **Start-AITerminal**: the two interactive prompts
+- **Get-CommandRisk / Test-CommandSafety**: the safety gate. It parses the generated command with the
+  PowerShell parser and returns the reasons it must not run without confirmation
+- **Invoke-GeneratedCommand**: the single place where a command is executed and recorded
 
 ## 🎯 Priority Areas
 
