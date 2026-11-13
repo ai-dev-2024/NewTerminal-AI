@@ -564,7 +564,13 @@ function Get-GitCommandRisk {
         'reflog' { if ($restLower -match '^(expire|delete)$') { return 'git reflog expire/delete removes recovery data' } }
         'gc' { if (Test-GitLongOption -Word $rest -Name 'prune') { return 'git gc --prune removes recovery data' } }
         'worktree' { if ($restLower -match '^(remove|prune)$') { return 'git worktree remove deletes a working tree' } }
-        'submodule' { if ($restLower -contains 'deinit') { return 'git submodule deinit removes submodule work trees' } }
+        'bisect' { if ($positional.Count -and $positional[0].ToLowerInvariant() -eq 'run') { return 'git bisect run executes an arbitrary command' } }
+        'rebase' { if ($short -cmatch '[xe]' -or (Test-GitLongOption -Word $rest -Name 'exec', 'command')) { return 'git rebase --exec runs an arbitrary command' } }
+        'submodule' {
+            if ($restLower -contains 'deinit') { return 'git submodule deinit removes submodule work trees' }
+            if ($restLower -contains 'foreach') { return 'git submodule foreach runs an arbitrary command' }
+        }
+        'difftool' { if ($short -cmatch '[xe]' -or (Test-GitLongOption -Word $rest -Name 'extcmd', 'command')) { return 'git difftool --extcmd runs an arbitrary command' } }
         'update-ref' { if ($rest -ccontains '-d') { return 'git update-ref -d deletes a ref' } }
         'config' { if ($restLower -match '^alias\.') { return 'git config alias can make git run arbitrary commands' } }
         { $_ -in 'filter-branch', 'filter-repo' } { return "git $sub rewrites history" }
