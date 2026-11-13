@@ -222,6 +222,21 @@ BeforeDiscovery {
         'git checkout --for main'
     )
 
+    # git subcommands that run an arbitrary command line: the gate cannot inspect what they will
+    # execute, so each one must be blocked whatever the payload is. Each vector is covered twice:
+    # once with a harmless payload (only the vector can make it unsafe) and once with a destructive
+    # one, mirroring the existing blanket "find -exec" rule.
+    $script:GitExec = New-GateCase @(
+        'git bisect run echo hello'
+        'git bisect run rm -rf ~'
+        'git rebase --exec "echo hello" HEAD~3'
+        'git rebase --exec "rm -rf ~" HEAD~3'
+        'git submodule foreach "echo hello"'
+        'git submodule foreach "rm -rf ~"'
+        'git difftool --extcmd "echo hello" HEAD~1'
+        'git difftool --extcmd "rm -rf ~" HEAD~1'
+    )
+
     $script:OtherTools = New-GateCase @(
         'docker system prune -af'
         'docker rm -f $(docker ps -aq)'
@@ -486,6 +501,12 @@ Describe 'Safety gate: commands the old regex denylist let through' -Tag 'Regres
 
     Context 'git' {
         It 'flags: <Label>' -ForEach $script:Git {
+            InModuleScope NewTerminal-AI -Parameters @{ C = $Command } { param($C) Test-CommandSafety -Command $C | Should -BeFalse }
+        }
+    }
+
+    Context 'git subcommands that execute an arbitrary command' {
+        It 'flags: <Label>' -ForEach $script:GitExec {
             InModuleScope NewTerminal-AI -Parameters @{ C = $Command } { param($C) Test-CommandSafety -Command $C | Should -BeFalse }
         }
     }
